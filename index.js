@@ -1,8 +1,8 @@
-import path from 'path';
-import express from 'express';
-import http from 'http';
+import path from "path";
+import express from "express";
+import http from "http";
 // import bodyParser from 'body-parser';
-import socketIO from 'socket.io';
+import socketIO from "socket.io";
 
 const app = express();
 const server = http.createServer(app);
@@ -13,12 +13,12 @@ const __dirname = path.resolve();
 
 //io.set('log level', 2);
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, "public")));
 
 //app.use(express.bodyParser());
 
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public/index.html'));
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
 /*************************/
@@ -37,84 +37,98 @@ const sockets = {};
  * information. After all of that happens, they'll finally be able to complete
  * the peer connection and will be streaming audio/video between eachother.
  */
-io.sockets.on('connection', socket => {
-    socket.channels = {};
-    sockets[socket.id] = socket;
+io.sockets.on("connection", (socket) => {
+  socket.channels = {};
+  sockets[socket.id] = socket;
 
-    console.log("[" + socket.id + "] connection accepted");
+  console.log("[" + socket.id + "] connection accepted");
 
-    const part = channel => {
-        console.log("[" + socket.id + "] part ");
+  const part = (channel) => {
+    console.log("[" + socket.id + "] part ");
 
-        if (!(channel in socket.channels)) {
-            console.log("[" + socket.id + "] ERROR: not in ", channel);
-            return;
-        }
-
-        delete socket.channels[channel];
-        delete channels[channel][socket.id];
-
-        for (id in channels[channel]) {
-            channels[channel][id].emit('removePeer', { 'peer_id': socket.id });
-            socket.emit('removePeer', { 'peer_id': id });
-        }
+    if (!(channel in socket.channels)) {
+      console.log("[" + socket.id + "] ERROR: not in ", channel);
+      return;
     }
-    
-    socket.on('disconnect', () => {
-        for (let channel in socket.channels) {
-            part(channel);
-        }
-        console.log("[" + socket.id + "] disconnected");
-        delete sockets[socket.id];
-    });
 
+    delete socket.channels[channel];
+    delete channels[channel][socket.id];
 
-    socket.on('join', config => {
-        console.log("[" + socket.id + "] join ", config);
-        const channel = config.channel;
-        // var userdata = config.userdata;
+    for (id in channels[channel]) {
+      channels[channel][id].emit("removePeer", { peer_id: socket.id });
+      socket.emit("removePeer", { peer_id: id });
+    }
+  };
 
-        if (channel in socket.channels) {
-            console.log("[" + socket.id + "] ERROR: already joined ", channel);
-            return;
-        }
+  socket.on("disconnect", () => {
+    for (let channel in socket.channels) {
+      part(channel);
+    }
+    console.log("[" + socket.id + "] disconnected");
+    delete sockets[socket.id];
+  });
 
-        if (!(channel in channels)) {
-            channels[channel] = {};
-        }
+  socket.on("join", (config) => {
+    console.log("[" + socket.id + "] join ", config);
+    const channel = config.channel;
+    // var userdata = config.userdata;
 
-        for (id in channels[channel]) {
-            channels[channel][id].emit('addPeer', { 'peer_id': socket.id, 'should_create_offer': false });
-            socket.emit('addPeer', { 'peer_id': id, 'should_create_offer': true });
-        }
+    if (channel in socket.channels) {
+      console.log("[" + socket.id + "] ERROR: already joined ", channel);
+      return;
+    }
 
-        channels[channel][socket.id] = socket;
-        socket.channels[channel] = channel;
-    });
+    if (!(channel in channels)) {
+      channels[channel] = {};
+    }
 
-    socket.on('part', part);
+    for (id in channels[channel]) {
+      channels[channel][id].emit("addPeer", {
+        peer_id: socket.id,
+        should_create_offer: false,
+      });
+      socket.emit("addPeer", { peer_id: id, should_create_offer: true });
+    }
 
-    socket.on('relayICECandidate', config => {
-        const peer_id = config.peer_id;
-        const ice_candidate = config.ice_candidate;
-        console.log("[" + socket.id + "] relaying ICE candidate to [" + peer_id + "] ", ice_candidate);
+    channels[channel][socket.id] = socket;
+    socket.channels[channel] = channel;
+  });
 
-        if (peer_id in sockets) {
-            sockets[peer_id].emit('iceCandidate', { 'peer_id': socket.id, 'ice_candidate': ice_candidate });
-        }
-    });
+  socket.on("part", part);
 
-    socket.on('relaySessionDescription', config => {
-        const peer_id = config.peer_id;
-        const session_description = config.session_description;
-        console.log("[" + socket.id + "] relaying session description to [" + peer_id + "] ", session_description);
+  socket.on("relayICECandidate", (config) => {
+    const peer_id = config.peer_id;
+    const ice_candidate = config.ice_candidate;
+    console.log(
+      "[" + socket.id + "] relaying ICE candidate to [" + peer_id + "] ",
+      ice_candidate
+    );
 
-        if (peer_id in sockets) {
-            sockets[peer_id].emit('sessionDescription', { 'peer_id': socket.id, 'session_description': session_description });
-        }
-    });
+    if (peer_id in sockets) {
+      sockets[peer_id].emit("iceCandidate", {
+        peer_id: socket.id,
+        ice_candidate: ice_candidate,
+      });
+    }
+  });
+
+  socket.on("relaySessionDescription", (config) => {
+    const peer_id = config.peer_id;
+    const session_description = config.session_description;
+    console.log(
+      "[" + socket.id + "] relaying session description to [" + peer_id + "] ",
+      session_description
+    );
+
+    if (peer_id in sockets) {
+      sockets[peer_id].emit("sessionDescription", {
+        peer_id: socket.id,
+        session_description: session_description,
+      });
+    }
+  });
 });
 
 server.listen(PORT, null, () => {
-    console.log("Listening on port " + PORT);
+  console.log("Listening on port " + PORT);
 });
